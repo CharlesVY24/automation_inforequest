@@ -1,12 +1,30 @@
 from typing import Union, Annotated
 
 from automations.tenders_automation import fetch_data
-from fastapi import  Depends, FastAPI, HTTPException, Query
+from fastapi import  Depends, FastAPI, HTTPException, Query, Request
+from fastapi.middleware.cors import CORSMiddleware
+import os
 
 from sqlmodel import select
 from models.tenders_model import create_db_and_tables, SessionDep, Tenders
 
 app = FastAPI()
+
+# CORS: configurable via ALLOWED_ORIGINS (comma-separated) env var
+allowed = os.getenv("ALLOWED_ORIGINS")
+if allowed:
+    origins = [o.strip() for o in allowed.split(",") if o.strip()]
+else:
+    # sensible default for dev: allow all. In production set ALLOWED_ORIGINS.
+    origins = ["*"]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["*"],
+)
 
 
 @app.on_event("startup")
@@ -68,3 +86,12 @@ def read_item(item_id: int, q: Union[str, None] = None):
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+
+@app.get("/diag")
+def diag(request: Request):
+    """Diagnostic endpoint that echoes some request headers to help debug CORS/network issues."""
+    return {
+        "client": request.client.host if request.client else None,
+        "headers": {k: v for k, v in request.headers.items() if k.lower() in ["origin", "host", "referer", "user-agent"]},
+    }
