@@ -1,41 +1,22 @@
 version: '3.8'
 
 services:
-  postgres:
-    image: postgres:15
-    container_name: postgres_db
-    restart: always
-    environment:
-      POSTGRES_USER: root
-      POSTGRES_PASSWORD: password1234
-      POSTGRES_DB: postgres
+  # Aplicación FastAPI
+  app:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    container_name: automation_inforequest_app
+    restart: unless-stopped
     ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    networks:
-      - postgres_network
-
-  pgadmin:
-    image: dpage/pgadmin4:latest
-    container_name: pgadmin_web
-    restart: always
+      - "8000:8000"
     environment:
-      PGADMIN_DEFAULT_EMAIL: admin@admin.com
-      PGADMIN_DEFAULT_PASSWORD: password1234
-    ports:
-      - "8080:80"
+      - URL_STRING_CONNECTION=${URL_STRING_CONNECTION}
+      - CLIENT_API_KEY_GOV_CO=${CLIENT_API_KEY_GOV_CO}
     volumes:
-      - pgadmin_data:/var/lib/pgadmin
-    networks:
-      - postgres_network
-    depends_on:
-      - postgres
-
-volumes:
-  postgres_data:
-  pgadmin_data:
-
-networks:
-  postgres_network:
-    driver: bridge
+      - ./my_bertopic_modelv07:/app/my_bertopic_modelv07:ro
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/docs"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
