@@ -1,37 +1,45 @@
-# Dockerfile para producción
-FROM python:3.11-slim
+# Dockerfile optimizado para producción
+FROM python:3.11-slim-bookworm
 
-# Establecer variables de entorno
+# Variables de entorno
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PYTHONPATH=/app
+    VIRTUAL_ENV=/opt/venv \
+    PATH="/opt/venv/bin:$PATH"
 
-# Crear directorio de trabajo
 WORKDIR /app
 
-# Instalar dependencias del sistema necesarias
+# Instalar dependencias del sistema necesarias (minimales)
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         build-essential \
         libpq-dev \
         curl \
-        && rm -rf /var/lib/apt/lists/*
+        gcc \
+        git \
+    && rm -rf /var/lib/apt/lists/*
 
-# Copiar requirements.txt y instalar dependencias de Python
-COPY requirements.txt .
-RUN pip install --no-cache-dir --upgrade pip \
-    && pip install --no-cache-dir -r requirements.txt
+# Copiar requirements e instalar dependencias dentro de un venv
+COPY requirements.txt /app/requirements.txt
+RUN python -m venv /opt/venv \
+    && pip install --upgrade pip setuptools wheel \
+    && pip install --no-cache-dir --prefer-binary -r /app/requirements.txt \
+    && pip install --no-cache-dir gunicorn \
+    # limpiar paquetes de compilación para reducir el tamaño de la imagen
+    && apt-get remove -y --purge build-essential gcc \
+    && apt-get autoremove -y \
+    && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
-# Copiar código de la aplicación
-COPY . .
+# Copiar solo lo necesario para reducir el contexto
+COPY . /app
 
-# Crear usuario no-root para seguridad
+# Crear usuario no-root
 RUN useradd --create-home --shell /bin/bash appuser \
     && chown -R appuser:appuser /app
 USER appuser
 
-# Exponer puerto
+# Puerto expuesto por la aplicación
 EXPOSE 8000
 
-# Comando para ejecutar la aplicación
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
+# Comando de producción usando Gunicorn + Uvicorn worker
+CMD ["gunicorn", "-k", "uvicorn.workers.UvicornWorker", "-w", "4", "main:app", "--bind", "0.0.0.0:8000", "--timeout", "120"]

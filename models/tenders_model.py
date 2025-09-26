@@ -11,7 +11,12 @@ load_dotenv()
 
 DATABASE_URL_POSTGRES = os.environ.get("URL_STRING_CONNECTION")
 
-engine = create_engine(DATABASE_URL_POSTGRES)
+# Create engine only if URL is provided. Avoid attempting to connect to localhost
+# when the environment variable is not set (production may provide an external DB).
+if DATABASE_URL_POSTGRES:
+    engine = create_engine(DATABASE_URL_POSTGRES)
+else:
+    engine = None
 
 
 class Tenders(SQLModel, table=True):
@@ -42,9 +47,18 @@ class Tenders(SQLModel, table=True):
     categorias_adicionales: Optional[str] = Field(default=None)
 
 def create_db_and_tables():
+    if not engine:
+        # No DB configured — skip creating tables and log a clear message
+        print("[WARN] No DATABASE_URL_POSTGRES configured. Skipping create_db_and_tables().")
+        return
     SQLModel.metadata.create_all(engine)
 
 def get_session():
+    if not engine:
+        # If code paths try to use DB when it's not configured, raise a clear error
+        raise RuntimeError("Database not configured. Set URL_STRING_CONNECTION in env.")
+
     with Session(engine) as session:
         yield session
+
 SessionDep = Annotated[Session, Depends(get_session)]

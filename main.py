@@ -1,17 +1,21 @@
 from typing import Union, Annotated
 
-from .automations.tenders_automation import fetch_data
+from automations.tenders_automation import fetch_data
 from fastapi import  Depends, FastAPI, HTTPException, Query
 
 from sqlmodel import select
-from .models.tenders_model import create_db_and_tables, SessionDep, Tenders
+from models.tenders_model import create_db_and_tables, SessionDep, Tenders
 
 app = FastAPI()
 
 
 @app.on_event("startup")
 def on_startup():
-    create_db_and_tables()
+    try:
+        create_db_and_tables()
+    except Exception as e:
+        # Log and continue — DB may be external and misconfigured; fail fast is avoided here
+        print(f"[ERROR] create_db_and_tables failed: {e}")
 
 @app.post("/automation")
 def read_root(
@@ -59,3 +63,8 @@ def read_root(
 @app.get("/items/{item_id}")
 def read_item(item_id: int, q: Union[str, None] = None):
     return {"item_id": item_id, "q": q}
+
+
+@app.get("/health")
+def health():
+    return {"status": "ok"}
